@@ -1,0 +1,9 @@
+accelerate==0.34.2
+appdirs
+loralib
+bitsandbytes
+datasets==2.14.6
+fire
+transformers==4.45.2
+sentencepiece
+torch==2.5.1
