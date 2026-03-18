@@ -13,11 +13,11 @@ XBridge leverages a compositional encoder-LLM-decoder architecture that offloads
 ## 🚀Key Features
 
 * **Mitigating catastrophic forgetting in multilingual extension:** boosts low-resource or unseen languages understanding and generation of LLM to near-NMT performance, while maintaining or improving high-resource languages performance, avoiding the common new–old language trade-off in multilingual extension.
-* **Compositional multilinguality**: Separates responsibilities across modules: encoder for multilingual understanding, LLM for general knowledge processing, and decoder for multilingual generation.
+* **Compositional multilinguality**: separates responsibilities across modules: encoder for multilingual understanding, LLM for general knowledge processing, and decoder for multilingual generation.
 * **Strong cross-lingual generalization**: the cross-model mapping layers are language-agnostic that even generalizes well to the untuned languages.
 * **Controllable language generation:** controls output languages by the target language token of the decoder.
-* **Lossless language switching:** Supports arbitrary language-to-language generation through the LLM pivot without degrading performance.
-* **Efficient training**: Requires only minimal additional parameters, limited training data (mostly bilingual pairs), and modest overhead.
+* **Lossless language switching:** supports arbitrary language-to-language generation through the LLM pivot without degrading performance.
+* **Efficient training**: requires only minimal additional parameters, limited training data (mostly bilingual pairs), and modest overhead.
 
 ## 🛠️Installation
 
@@ -132,7 +132,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python $finetune \
 
 ## 📚Citation
 
-If you find this repository useful, please star this repository and cite.
+If you find this repository useful, please star this repository and cite our paper.
 
 
 
