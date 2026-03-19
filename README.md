@@ -47,7 +47,9 @@ git clone https://github.com/NJUNLP/MMT-LLM.git
 
 ## 📄Dataset Preparation
 
-We extract multilingual translation data from [OPUS-100](https://github.com/EdinburghNLP/opus-100-corpus), multilingual mathematical reasoning data from [MultilingualMath](https://drive.google.com/drive/folders/1evjD7HMLPBel1GKXtg-z77dR8DuCquPl?dmr=1&ec=wgc-drive-hero-goto), and multilingual abstractive summarization data from [XL-Sum](https://huggingface.co/datasets/csebuetnlp/xlsum). Please refer to the paper for detailed data construction procedures.
+For training, we extract multilingual translation data from [OPUS-100](https://github.com/EdinburghNLP/opus-100-corpus), multilingual mathematical reasoning data from [MultilingualMath](https://drive.google.com/drive/folders/1evjD7HMLPBel1GKXtg-z77dR8DuCquPl?dmr=1&ec=wgc-drive-hero-goto), and multilingual abstractive summarization data from [XL-Sum](https://huggingface.co/datasets/csebuetnlp/xlsum). Please refer to the paper for detailed data construction procedures.
+
+For evaluation, we test cross-model mapping quality with [FLORES-101](https://github.com/facebookresearch/flores/tree/main/previous_releases/flores101) for stage 1, test multilingual mathematical reasoning with [MGSM](https://huggingface.co/datasets/juletxara/mgsm), and multilingual abstract summarization with [XL-Sum test set](https://huggingface.co/datasets/csebuetnlp/xlsum).
 
 ## 🔥Training
 
@@ -130,6 +132,48 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python $finetune \
     --freeze_mapping_enc2llm True --freeze_mapping_llm2dec False \
     --task="math" \
     --learning_rate=2e-5
+```
+
+## 💭Inference
+
+Below is an example evaluation script.
+
+```shell
+# evaluation on stage1
+generate_batch_from_file=inference_xbridge_stage1.py
+mt_tokenizer_path=/path/to/your/NMT/model
+llm_tokenizer_path=/path/to/your/LLM
+base_model=/path/to/your/stage1/checkpoint
+testset_dir=/path/to/your/FLOERS-101
+output_dir=/path/to/your/output/dir
+test_langs=en,bn,de,es,fr,ja,ru,sw,th,zh
+
+mkdir -p $output_dir
+
+CUDA_VISIBLE_DEVICES=0 python $generate_batch_from_file \
+    --mt_tokenizer_path $mt_tokenizer_path --llm_tokenizer_path $llm_tokenizer_path \
+    --base_model $base_model \
+    --batch_size 12 \
+    --testset_dir $testset_dir --output_dir $output_dir \
+    --test_langs $test_langs --max_new_tokens 512
+
+# evaluation on stage2&3
+generate_batch_from_file=inference_xbridge_stage2_and_3.py
+mt_tokenizer_path=/path/to/your/NMT/model
+llm_tokenizer_path=/path/to/your/LLM
+base_model=/path/to/your/stage3/checkpoint
+testset_dir=/path/to/your/MGSM
+output_dir=/path/to/your/output/dir
+test_langs=en,bn,de,es,fr,ja,ru,sw,th,zh
+
+mkdir -p $output_dir
+
+CUDA_VISIBLE_DEVICES=0 python $generate_batch_from_file \
+    --mt_tokenizer_path $mt_tokenizer_path --llm_tokenizer_path $llm_tokenizer_path \
+    --base_model $base_model \
+    --batch_size 12 \
+    --testset_dir $testset_dir --output_dir $output_dir \
+    --test_langs $test_langs --max_new_tokens 512
 ```
 
 ## 📚Citation
