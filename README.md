@@ -2,6 +2,8 @@
 
 > [Mengyu Bu](https://bingo123122121.github.io/), [Yang Feng](https://people.ucas.edu.cn/~yangfeng?language=en)
 
+![Paper](https://img.shields.io/badge/arXiv-2603.17512-b31b1b?logo=arXiv) ![code](https://img.shields.io/badge/github-XBridge-keygen?logo=GitHub&link=https%3A%2F%2Fgithub.com%2Fictnlp%2FXBridge)
+
 Official code for Paper "*Language on Demand, Knowledge at Core*: Composing LLMs with Encoder-Decoder Translation Models for Extensible Multilinguality".
 
 ![framework](figures/framework.png)
@@ -12,11 +14,11 @@ XBridge leverages a compositional encoder-LLM-decoder architecture that offloads
 
 ## 🚀Key Features
 
-* **Mitigating catastrophic forgetting in multilingual extension:** boosts low-resource or unseen languages understanding and generation of LLM to near-NMT performance, while maintaining or improving high-resource languages performance, avoiding the common new–old language trade-off in multilingual extension.
 * **Compositional multilinguality**: separates responsibilities across modules: encoder for multilingual understanding, LLM for general knowledge processing, and decoder for multilingual generation.
 * **Strong cross-lingual generalization**: the cross-model mapping layers are language-agnostic that even generalizes well to the untuned languages.
 * **Controllable language generation:** controls output languages by the target language token of the decoder.
 * **Lossless language switching:** supports arbitrary language-to-language generation through the LLM pivot without degrading performance.
+* **Mitigating catastrophic forgetting in multilingual extension:** boosts low-resource or unseen languages understanding and generation of LLM to near-NMT performance, while maintaining or improving high-resource languages performance, avoiding the common new–old language trade-off in multilingual extension.
 * **Efficient training**: requires only minimal additional parameters, limited training data (mostly bilingual pairs), and modest overhead.
 
 ## 🛠️Installation
@@ -132,7 +134,19 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python $finetune \
 
 ## 📚Citation
 
-If you find this repository useful, please star this repository and cite our paper.
+If you find this repository useful, please star this repository and cite our paper:
+
+```tex
+@misc{bu2026languagedemandknowledgecore,
+      title={Language on Demand, Knowledge at Core: Composing LLMs with Encoder-Decoder Translation Models for Extensible Multilinguality}, 
+      author={Mengyu Bu and Yang Feng},
+      year={2026},
+      eprint={2603.17512},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2603.17512}, 
+}
+```
 
 
 
