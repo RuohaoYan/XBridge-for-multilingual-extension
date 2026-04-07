@@ -103,7 +103,7 @@ def main(
         len_tokenizer_llm=len(tokenizer_llm)
     )
     model.model_mt.lm_head.weight = model.model_mt.model.shared.weight
-    model.model_mt.lm_head._hf_hook.execution_device=model.model_mt.model.shared.weight.device.index
+    # model.model_mt.lm_head._hf_hook.execution_device=model.model_mt.model.shared.weight.device.index
 
     model.eval()
     

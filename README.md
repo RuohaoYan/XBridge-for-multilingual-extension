@@ -4,7 +4,7 @@
 
 ![Paper](https://img.shields.io/badge/arXiv-2603.17512-b31b1b?logo=arXiv) ![code](https://img.shields.io/badge/github-XBridge-keygen?logo=GitHub&link=https%3A%2F%2Fgithub.com%2Fictnlp%2FXBridge)
 
-Official code for Paper "*Language on Demand, Knowledge at Core*: Composing LLMs with Encoder-Decoder Translation Models for Extensible Multilinguality".
+Official code for ACL 2026 Main Conference paper "*Language on Demand, Knowledge at Core*: Composing LLMs with Encoder-Decoder Translation Models for Extensible Multilinguality".
 
 ![framework](figures/framework.png)
 
