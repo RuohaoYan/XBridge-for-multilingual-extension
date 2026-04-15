@@ -21,7 +21,8 @@ XBridge leverages a compositional encoder-LLM-decoder architecture that offloads
 * **Mitigating catastrophic forgetting in multilingual extension:** boosts low-resource or unseen languages understanding and generation of LLM to near-NMT performance, while maintaining or improving high-resource languages performance, avoiding the common new–old language trade-off in multilingual extension.
 * **Efficient training**: requires only minimal additional parameters, limited training data (mostly bilingual pairs), and modest overhead.
 
-<video src="./figures/XBridge_demo.mp4" controls=""></video>
+https://github.com/user-attachments/assets/965fabc3-2701-455e-828a-afe24a49dfbd
+
 
 ## 🛠️Installation
 
