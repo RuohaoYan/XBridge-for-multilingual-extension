@@ -187,6 +187,18 @@ We release `XBridge-base` and `XBridge-SFT` in the [Hugging Face collection](htt
 
 **Try our Gradio demo for general QA among 50 languages!**
 
+```shell
+gradio_demo=demo.py
+mt_tokenizer_path=/path/to/your/NMT/model
+llm_tokenizer_path=/path/to/your/LLM
+model_path=/path/to/your/stage3/checkpoint
+
+CUDA_VISIBLE_DEVICES=0 python $gradio_demo \
+    --model_path $model_path \
+    --mt_tokenizer_path $mt_tokenizer_path --llm_tokenizer_path $llm_tokenizer_path \
+    --max_gen_len 256
+```
+
 ## 📚Citation
 
 If you find this repository useful, please star this repository and cite our paper:
