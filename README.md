@@ -192,7 +192,7 @@ We release `XBridge-base` and `XBridge-SFT` in the [Hugging Face collection](htt
 gradio_demo=demo.py
 mt_tokenizer_path=/path/to/your/NMT/model
 llm_tokenizer_path=/path/to/your/LLM
-model_path=/path/to/your/stage3/checkpoint
+model_path=/path/to/our/hf/model
 
 CUDA_VISIBLE_DEVICES=0 python $gradio_demo \
     --model_path $model_path \
