@@ -2,7 +2,7 @@
 
 > [Mengyu Bu](https://bingo123122121.github.io/), [Yang Feng](https://people.ucas.edu.cn/~yangfeng?language=en)
 
-![Paper](https://img.shields.io/badge/arXiv-2603.17512-b31b1b?logo=arXiv) ![code](https://img.shields.io/badge/github-XBridge-keygen?logo=GitHub&link=https%3A%2F%2Fgithub.com%2Fictnlp%2FXBridge)
+[![arXiv](https://img.shields.io/badge/arXiv-2603.17512-b31b1b%3Flogo%3DarXiv?logo=arxiv&color=b31b1b&link=https%3A%2F%2Farxiv.org%2Fabs%2F2603.17512)](https://arxiv.org/abs/2603.17512) [![github](https://img.shields.io/badge/GitHub-Code-keygen%3Flogo%3DGitHub?logo=github&link=https%3A%2F%2Fgithub.com%2Fictnlp%2FXBridge)](https://github.com/ictnlp/XBridge) [![github](https://img.shields.io/badge/Hugging%20Face-Model-b31b1b%3Flogo%3Dhuggingface?logo=Hugging%20Face&color=blue&link=https%3A%2F%2Fhuggingface.co%2Fcollections%2FICTNLP%2Fxbridge)](https://huggingface.co/collections/ICTNLP/xbridge)
 
 Official code for ACL 2026 Main Conference paper "*Language on Demand, Knowledge at Core*: Composing LLMs with Encoder-Decoder Translation Models for Extensible Multilinguality".
 
@@ -20,6 +20,8 @@ XBridge leverages a compositional encoder-LLM-decoder architecture that offloads
 * **Lossless language switching:** supports arbitrary language-to-language generation through the LLM pivot without degrading performance.
 * **Mitigating catastrophic forgetting in multilingual extension:** boosts low-resource or unseen languages understanding and generation of LLM to near-NMT performance, while maintaining or improving high-resource languages performance, avoiding the common new–old language trade-off in multilingual extension.
 * **Efficient training**: requires only minimal additional parameters, limited training data (mostly bilingual pairs), and modest overhead.
+
+<video src="./figures/XBridge_demo.mp4" controls=""></video>
 
 ## 🛠️Installation
 
@@ -175,6 +177,15 @@ CUDA_VISIBLE_DEVICES=0 python $generate_batch_from_file \
     --testset_dir $testset_dir --output_dir $output_dir \
     --test_langs $test_langs --max_new_tokens 512
 ```
+
+## ✨Gradio Demo
+
+We release `XBridge-base` and `XBridge-SFT` in the [Hugging Face collection](https://huggingface.co/collections/ICTNLP/xbridge): 
+
+* `XBridge-base` is trained with stage 1 (cross-model alignment) using trilingual translation data, composing [`LLaMA3-8B`](https://huggingface.co/meta-llama/Meta-Llama-3-8B) with [`NLLB-200-1.3B`](https://huggingface.co/facebook/nllb-200-1.3B). Training is conducted on 10 languages: *Bn, De, En, Es, Fr, Ja, Ru, Sw, Th, Zh*.
+* `XBridge-SFT` further extends `XBridge-base` by training stage 2 (encoder-side adaptation) and stage 3 (decoder-side adaptation) for instruction-following tasks on [`Bactrian-X`](https://huggingface.co/datasets/MBZUAI/Bactrian-X) dataset. We expand to the following additional languages: *Af, Ar, Az, Cs, El, Et, Fa, Fi, Gl, Gu, He, Hi, Hr, Id, It, Ka, Kk, Km, Lt, Lv, Mk, Ml, Mn, Mr, My, Ne, Nl, Pl, Ps, Pt, Ro, Sl, Sv, Ta, Te, Tr, Uk, Ur, Vi, Xh*.
+
+**Try our Gradio demo for general QA among 50 languages!**
 
 ## 📚Citation
 
