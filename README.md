@@ -69,72 +69,7 @@ XBridge composes LLMs with NMT models in three stages:
 
   Adapt the LLM-decoder interface for robust multilingual generation.
 
-Below is an example training script.
-
-```shell
-# Stage 1
-finetune=finetune_xbridge_stage1.py
-mt_path=/path/to/your/NMT/model
-mt_tokenizer_path=/path/to/your/NMT/model
-llm_path=/path/to/your/LLM
-llm_tokenizer_path=/path/to/your/LLM
-data_path=/path/to/your/data
-output_dir=/path/to/your/checkpoint
-
-CUDA_VISIBLE_DEVICES=0,1,2,3 python $finetune \
-    --mt_path $mt_path --mt_tokenizer_path $mt_tokenizer_path \
-    --llm_path $llm_path --llm_tokenizer_path $llm_tokenizer_path \
-    --data_path $data_path \
-    --output_dir $output_dir \
-    --num_epochs=2 --batch_size=128 --micro_batch_size=8 \
-    --max_seq_len=512 --group_by_length \
-    --freeze_enc=True --freeze_llm=True --freeze_dec=True \
-    --freeze_mapping_enc2llm=False --freeze_mapping_llm2dec=True \
-    --learning_rate=2e-5 --dec_lambda=1.0 --ot_lambda=6.0
-
-# Stage 2
-finetune=finetune_xbridge_stage2_and_3.py
-mt_path=/path/to/your/NMT/model
-mt_tokenizer_path=/path/to/your/NMT/model
-llm_path=/path/to/your/LLM
-llm_tokenizer_path=/path/to/your/stage1/checkpoint
-data_path=/path/to/your/data
-output_dir=/path/to/your/checkpoint
-
-CUDA_VISIBLE_DEVICES=0,1,2,3 python $finetune \
-    --mt_path $mt_path --mt_tokenizer_path $mt_tokenizer_path \
-    --llm_path $llm_path --llm_tokenizer_path $llm_tokenizer_path \
-    --data_path $data_path \
-    --output_dir $output_dir \
-    --num_epochs=3 --batch_size=128 --micro_batch_size=8 \
-    --max_seq_len=512 --group_by_length \
-    --freeze_enc True --freeze_llm True --freeze_dec True \
-    --freeze_mapping_enc2llm False --freeze_mapping_llm2dec True \
-    --task="math" \
-    --learning_rate=2e-5
-
-
-# Stage 3
-finetune=finetune_xbridge_stage2_and_3.py
-mt_path=/path/to/your/NMT/model
-mt_tokenizer_path=/path/to/your/NMT/model
-llm_path=/path/to/your/LLM
-llm_tokenizer_path=/path/to/your/stage2/checkpoint
-data_path=/path/to/your/data
-output_dir=/path/to/your/checkpoint
-
-CUDA_VISIBLE_DEVICES=0,1,2,3 python $finetune \
-    --mt_path $mt_path --mt_tokenizer_path $mt_tokenizer_path \
-    --llm_path $llm_path --llm_tokenizer_path $llm_tokenizer_path \
-    --data_path $data_path \
-    --output_dir $output_dir \
-    --num_epochs=3 --batch_size=128 --micro_batch_size=8 \
-    --max_seq_len=512 --group_by_length \
-    --freeze_enc True --freeze_llm True --freeze_dec True \
-    --freeze_mapping_enc2llm True --freeze_mapping_llm2dec False \
-    --task="math" \
-    --learning_rate=2e-5
-```
+See our paper for details about training strategy.
 
 ## 💭Inference
 
@@ -199,7 +134,21 @@ CUDA_VISIBLE_DEVICES=0 python $gradio_demo \
     --max_gen_len 256
 ```
 
+## ⚖️LICENSE
+Our code is released under the Apache-2.0 License. Our model is intended for academic research purposes only and may **NOT** be used for commercial purposes.
+
+You are free to use, modify, and distribute this model in academic settings, provided that the following conditions are met:
+
+* **Non-commercial use**: The model may not be used for any commercial purposes.
+* **Citation**: If you use this model in your research, please cite the original work.
+
+### ❗Commercial Use Restriction
+For any commercial use inquiries or to obtain a commercial license, please contact `fengyang@ict.ac.cn`.
+
+
 ## 📚Citation
+
+If you have any questions, please feel free to submit an issue or contact `bumengyu23z@ict.ac.cn`. 
 
 If you find this repository useful, please star this repository and cite our paper:
 
