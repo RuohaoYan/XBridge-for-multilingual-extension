@@ -4,7 +4,7 @@
 
 [![arXiv](https://img.shields.io/badge/arXiv-2603.17512-b31b1b%3Flogo%3DarXiv?logo=arxiv&color=b31b1b&link=https%3A%2F%2Farxiv.org%2Fabs%2F2603.17512)](https://arxiv.org/abs/2603.17512) [![github](https://img.shields.io/badge/GitHub-Code-keygen%3Flogo%3DGitHub?logo=github&link=https%3A%2F%2Fgithub.com%2Fictnlp%2FXBridge)](https://github.com/ictnlp/XBridge) [![github](https://img.shields.io/badge/Hugging%20Face-Model-b31b1b%3Flogo%3Dhuggingface?logo=Hugging%20Face&color=blue&link=https%3A%2F%2Fhuggingface.co%2Fcollections%2FICTNLP%2Fxbridge)](https://huggingface.co/collections/ICTNLP/xbridge)
 
-Official code for ACL 2026 Main Conference paper "*Language on Demand, Knowledge at Core*: Composing LLMs with Encoder-Decoder Translation Models for Extensible Multilinguality".
+Official code for **ACL 2026 Main Conference** paper "*Language on Demand, Knowledge at Core*: Composing LLMs with Encoder-Decoder Translation Models for Extensible Multilinguality".
 
 ![framework](figures/framework.png)
 
