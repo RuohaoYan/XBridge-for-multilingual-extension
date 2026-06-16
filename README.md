@@ -21,8 +21,6 @@ XBridge leverages a compositional encoder-LLM-decoder architecture that offloads
 * **Mitigating catastrophic forgetting in multilingual extension:** boosts low-resource or unseen languages understanding and generation of LLM to near-NMT performance, while maintaining or improving high-resource languages performance, avoiding the common new–old language trade-off in multilingual extension.
 * **Efficient training**: requires only minimal additional parameters, limited training data (mostly bilingual pairs), and modest overhead.
 
-https://github.com/user-attachments/assets/965fabc3-2701-455e-828a-afe24a49dfbd
-
 
 ## 🛠️Installation
 
@@ -114,26 +112,20 @@ CUDA_VISIBLE_DEVICES=0 python $generate_batch_from_file \
     --test_langs $test_langs --max_new_tokens 512
 ```
 
-## ✨Gradio Demo
+## ✨Released Checkpoints
 
 We release `XBridge-base` and `XBridge-SFT` in the [Hugging Face collection](https://huggingface.co/collections/ICTNLP/xbridge): 
 
-* `XBridge-base` is trained with stage 1 (cross-model alignment) using trilingual translation data, composing [`LLaMA3-8B`](https://huggingface.co/meta-llama/Meta-Llama-3-8B) with [`NLLB-200-1.3B`](https://huggingface.co/facebook/nllb-200-1.3B). Training is conducted on 10 languages: *Bn, De, En, Es, Fr, Ja, Ru, Sw, Th, Zh*.
-* `XBridge-SFT` further extends `XBridge-base` by training stage 2 (encoder-side adaptation) and stage 3 (decoder-side adaptation) for instruction-following tasks on [`Bactrian-X`](https://huggingface.co/datasets/MBZUAI/Bactrian-X) dataset. We expand to the following additional languages: *Af, Ar, Az, Cs, El, Et, Fa, Fi, Gl, Gu, He, Hi, Hr, Id, It, Ka, Kk, Km, Lt, Lv, Mk, Ml, Mn, Mr, My, Ne, Nl, Pl, Ps, Pt, Ro, Sl, Sv, Ta, Te, Tr, Uk, Ur, Vi, Xh*.
+* `XBridge-base` is trained with stage 1 (cross-model alignment) using trilingual translation data, composing [`LLaMA3-8B`](https://huggingface.co/meta-llama/Meta-Llama-3-8B) with [`NLLB-200-1.3B`](https://huggingface.co/facebook/nllb-200-1.3B).
+* `XBridge-SFT` further extends `XBridge-base` by training stage 2 (encoder-side adaptation) and stage 3 (decoder-side adaptation) for multilingual reasoning task [MGSM](https://huggingface.co/datasets/juletxara/mgsm).
 
-**Try our Gradio demo for general QA among 50 languages!**
+Language coverage:  *Bn, De, En, Es, Fr, Ja, Ru, Sw, Th, Zh*.
 
-```shell
-gradio_demo=demo.py
-mt_tokenizer_path=/path/to/your/NMT/model
-llm_tokenizer_path=/path/to/your/LLM
-model_path=/path/to/our/hf/model
+## 🌍BayLing-MLingual
 
-CUDA_VISIBLE_DEVICES=0 python $gradio_demo \
-    --model_path $model_path \
-    --mt_tokenizer_path $mt_tokenizer_path --llm_tokenizer_path $llm_tokenizer_path \
-    --max_gen_len 256
-```
+XBridge serves as the research foundation of **BayLing-MLingual**. BayLing-MLingual extends XBridge from a research setting to practical multilingual question answering across 50 languages and 2500 cross-lingual pairs. **Try our BayLing-MLingual for general QA among 50 languages!**
+
+👉 https://github.com/BayLing-Models/BayLing-MLingual
 
 ## ⚖️LICENSE
 Our code is released under the Apache-2.0 License. Our model is intended for academic research purposes only and may **NOT** be used for commercial purposes.
