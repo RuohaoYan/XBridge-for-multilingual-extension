@@ -22,6 +22,9 @@ XBridge leverages a compositional encoder-LLM-decoder architecture that offloads
 * **Efficient training**: requires only minimal additional parameters, limited training data (mostly bilingual pairs), and modest overhead.
 
 
+https://github.com/user-attachments/assets/0ae84d2d-91b1-43f8-8b42-22e1c447c616
+
+
 ## 🛠️Installation
 
 ### 1. Clone this repository
