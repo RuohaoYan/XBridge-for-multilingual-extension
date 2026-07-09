@@ -18,6 +18,7 @@ The full paper Stage 1 uses trilingual `(x, en, y)` data and three losses. For d
 
 ## Files
 
+- `DATA_REQUIREMENTS.md`: detailed data schema, examples, scale recommendations, and quality checks.
 - `build_x_en_data.py`: converts parallel text or JSON/JSONL into the local JSONL format.
 - `train_encoder_x_en_mp.py`: multi-GPU/gloo training script for `mapping_enc2llm` only.
 - `infer_encoder_x_en.py`: batch inference script for English generation from multilingual input.
@@ -39,6 +40,8 @@ Fields:
 - `src`: multilingual input sentence `x`.
 - `tgt`: English target `en`.
 - `prompt`: optional LLM instruction. The default is `Translate into English:`.
+
+For complete data requirements, see `stage1_encoder_x_en/DATA_REQUIREMENTS.md`.
 
 ## Quick start
 
