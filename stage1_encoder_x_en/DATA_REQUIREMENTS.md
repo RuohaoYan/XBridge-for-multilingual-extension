@@ -288,3 +288,97 @@ LLM CE + decoder CE + OT
 ```
 
 This folder intentionally does not use that data. It only trains the encoder-side bridge so that multilingual inputs can be mapped into the frozen LLM and generate English reliably.
+
+## 12. Data already built in this repo
+
+The concrete Stage 1 encoder x->English data currently generated in this repo is a
+balanced 9-language mix, **50,000 examples per language = 450,000 total**.
+
+### 12.1 Builder
+
+Built with `stage1_encoder_x_en/build_from_opus100.py` (not `build_x_en_data.py`, which
+cannot read parquet). For every language the pipeline is identical:
+
+```text
+read source -> normalize whitespace -> filter -> dedupe -> reservoir-sample to cap
+```
+
+Filters applied (`keep()`):
+
+- `2 <= len(src)` and `2 <= len(tgt)` (`--min_chars 2`)
+- `len(src) <= 500` and `len(tgt) <= 500` (`--max_chars 500`)
+- drop `src == tgt` (untranslated / copied lines)
+- `tgt` must contain at least one Latin letter (English target sanity)
+- exact `(src, tgt)` de-duplication within each language
+
+Reservoir sampling uses `seed = 42 + language_index`, so runs are deterministic and each
+language is decorrelated.
+
+### 12.2 Languages and sources
+
+Eight languages come from the local OPUS-100 mirror
+(`data/Helsinki-NLP_opus-100/<pair>/train-*.parquet`, each row
+`{"translation": {"en": ..., "<lang>": ...}}`). Swahili is **not** in that mirror, so it
+comes from the NLLB x-en JSONL instead.
+
+| lang | `src_lang` (NLLB) | source kind | source path | cap |
+|---|---|---|---|---|
+| zh | `zho_Hans` | opus-100 parquet | `data/Helsinki-NLP_opus-100/en-zh` | 50,000 |
+| bn | `ben_Beng` | opus-100 parquet | `data/Helsinki-NLP_opus-100/bn-en` | 50,000 |
+| th | `tha_Thai` | opus-100 parquet | `data/Helsinki-NLP_opus-100/en-th` | 50,000 |
+| ja | `jpn_Jpan` | opus-100 parquet | `data/Helsinki-NLP_opus-100/en-ja` | 50,000 |
+| ru | `rus_Cyrl` | opus-100 parquet | `data/Helsinki-NLP_opus-100/en-ru` | 50,000 |
+| de | `deu_Latn` | opus-100 parquet | `data/Helsinki-NLP_opus-100/de-en` | 50,000 |
+| fr | `fra_Latn` | opus-100 parquet | `data/Helsinki-NLP_opus-100/en-fr` | 50,000 |
+| es | `spa_Latn` | opus-100 parquet | `data/Helsinki-NLP_opus-100/en-es` | 50,000 |
+| sw | `swh_Latn` | NLLB JSONL | `data/encoder_only/opus100_sw_en_200k.jsonl` | 50,000 |
+
+Swahili source has 200,000 raw pairs; 199,722 survive filtering/dedup and 50,000 are
+sampled for the balanced mix.
+
+### 12.3 Output files
+
+All under `data/stage1_encoder_x_en/`:
+
+| File | Lines | Role |
+|---|---|---|
+| `<lang>_en.jsonl` (9 files) | 50,000 each | per-language split |
+| `multilingual_x_en.jsonl` | 450,000 | mixed + shuffled (seed 42); build source |
+| `multilingual_x_en.train.jsonl` | 450,000 | json-mode passthrough; the `TRAIN_FILE` used by training |
+
+Every line follows the schema in section 1, e.g.:
+
+```json
+{"src_lang": "swh_Latn", "src": "...", "tgt": "English ...", "prompt": "Translate into English:"}
+```
+
+### 12.4 Regenerate
+
+Balanced 9x50k (current state):
+
+```bash
+python3 stage1_encoder_x_en/build_from_opus100.py \
+  --langs zh,bn,th,ja,ru,de,fr,es,sw --per_lang 50000 --seed 42 \
+  --out_dir data/stage1_encoder_x_en
+```
+
+Per-language caps use `lang[:cap]` syntax, e.g. keep all Swahili at 200k:
+
+```bash
+python3 stage1_encoder_x_en/build_from_opus100.py \
+  --langs zh,bn,th,ja,ru,de,fr,es,sw:200000 --per_lang 50000 --seed 42
+```
+
+### 12.5 Config wiring
+
+`stage1_encoder_x_en/config.env` consumes this data with `DATA_MODE="json"`:
+
+```bash
+DATA_MODE="json"
+INPUT_FILE="data/stage1_encoder_x_en/multilingual_x_en.jsonl"
+TRAIN_FILE="data/stage1_encoder_x_en/multilingual_x_en.train.jsonl"
+```
+
+`INPUT_FILE` and `TRAIN_FILE` **must be different paths**: `build_x_en_data.py` truncates
+the output before reading the input, so pointing both at the same file yields an empty
+train set. Then `bash stage1_encoder_x_en/run_train.sh` regenerates `TRAIN_FILE` and trains.

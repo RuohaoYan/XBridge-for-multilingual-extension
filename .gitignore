@@ -12,6 +12,8 @@ __pycache__/
 .idea/
 *.swp
 *.swo
+stage1_encoder_x_en/config.env
+*.bundle
 
 # Large artifacts (download or train locally)
 model/
