@@ -77,10 +77,10 @@ Bengali to English:
 {"src_lang": "ben_Beng", "src": "আজ আবহাওয়া ভালো।", "tgt": "The weather is good today.", "prompt": "Translate into English:"}
 ```
 
-Swahili to English:
+Hausa to English:
 
 ```json
-{"src_lang": "swh_Latn", "src": "Hali ya hewa ni nzuri leo.", "tgt": "The weather is good today.", "prompt": "Translate into English:"}
+{"src_lang": "hau_Latn", "src": "Yanayi yana da kyau yau.", "tgt": "The weather is good today.", "prompt": "Translate into English:"}
 ```
 
 Uyghur to English:
@@ -88,6 +88,8 @@ Uyghur to English:
 ```json
 {"src_lang": "uig_Arab", "src": "بۈگۈن ھاۋا ياخشى.", "tgt": "The weather is good today.", "prompt": "Translate into English:"}
 ```
+
+Swahili is valid for NLLB tokenization as `swh_Latn`, but `Helsinki-NLP/opus-100` does not provide an `sw-en` / `swh-en` subset. If you train Swahili here, use an external Swahili-English parallel corpus and convert it to the same JSONL schema.
 
 ## 4. Incorrect examples
 
@@ -117,23 +119,33 @@ NLLB tokenization requires the correct source language code.
 
 ## 5. Recommended data sources
 
-Recommended source: OPUS-100 English-centric parallel data.
+Recommended source for languages covered by the Hugging Face dataset: `Helsinki-NLP/opus-100` English-centric parallel data.
 
-For each non-English language, use the corresponding `x-en` direction. For example:
+Important caveat: the Hugging Face `Helsinki-NLP/opus-100` subset list does **not** include `sw-en`, `en-sw`, `swh-en`, or `so-en`. Do not assume every XBridge/FLORES language is available in OPUS-100.
+
+For each covered non-English language, use the corresponding `x-en` or `en-x` subset and normalize it to this folder's `src/tgt` schema. Examples available in `Helsinki-NLP/opus-100` include:
 
 ```text
-zh-en
+zh-en / en-zh
 bn-en
-sw-en
-th-en
-ja-en
-ru-en
-de-en
-fr-en
-es-en
+en-ha
+en-ig
+en-rw
+en-xh
+en-yo
+en-zu
+th-en / en-th
+ja-en / en-ja
+ru-en / en-ru
+de-en / en-de
+fr-en / en-fr
+es-en / en-es
+ug-en / en-ug
 ```
 
-For a Chinese-only sanity run, `zh-en` is enough. For real multilingual encoder alignment, mix multiple `x-en` language pairs into a single JSONL file and keep a correct `src_lang` on every line.
+For a Chinese-only sanity run, `zh-en` or `en-zh` normalized to `src=zh, tgt=en` is enough. For real multilingual encoder alignment, mix multiple covered `x-en` language pairs into a single JSONL file and keep a correct `src_lang` on every line.
+
+For languages not present in OPUS-100, use another parallel corpus and convert it to the same schema. The training code is dataset-agnostic as long as each line has `src_lang`, `src`, and English `tgt`.
 
 ## 6. Recommended scale
 
@@ -144,7 +156,7 @@ Use the following levels depending on the experiment:
 | Smoke test | 1k-5k examples for one language |
 | Chinese-only debug | 50k-200k `zh-en` examples |
 | Multilingual warmup | 50k examples per language |
-| Paper-like language coverage, encoder side only | 9 non-English languages x 50k each |
+| Paper-like encoder-side coverage | 50k per selected language; use OPUS-100 where available and external corpora for missing languages |
 
 This folder does not require `y`, NLLB-200-3.3B synthetic target generation, decoder labels, or OT labels.
 
@@ -196,7 +208,7 @@ Build separate files first:
 ```bash
 python stage1_encoder_x_en/build_x_en_data.py --source_file data/raw/zh.txt --english_file data/raw/zh.en.txt --output_file data/stage1_encoder_x_en/zh_en.jsonl --src_lang zho_Hans
 python stage1_encoder_x_en/build_x_en_data.py --source_file data/raw/bn.txt --english_file data/raw/bn.en.txt --output_file data/stage1_encoder_x_en/bn_en.jsonl --src_lang ben_Beng
-python stage1_encoder_x_en/build_x_en_data.py --source_file data/raw/sw.txt --english_file data/raw/sw.en.txt --output_file data/stage1_encoder_x_en/sw_en.jsonl --src_lang swh_Latn
+python stage1_encoder_x_en/build_x_en_data.py --source_file data/raw/ha.txt --english_file data/raw/ha.en.txt --output_file data/stage1_encoder_x_en/ha_en.jsonl --src_lang hau_Latn
 ```
 
 Then concatenate and shuffle:
@@ -225,6 +237,7 @@ Before training, check:
 - Very long examples are filtered or truncated.
 - The file is shuffled if multiple languages are mixed.
 - The prompt is consistent across samples unless prompt variation is intentional.
+- The requested language pair actually exists in the source dataset. For example, do not request `sw-en` from `Helsinki-NLP/opus-100`.
 
 A quick line-count check:
 
