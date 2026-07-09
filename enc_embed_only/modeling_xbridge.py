@@ -38,6 +38,7 @@ class XBridgeConfig(LlamaConfig):
         freeze_mapping_llm2dec = False,
         llm_only = True,
         train_device_map = "auto",
+        use_embed_fusion = False,
         mt_vocab_size = 32000,
         **kwargs):
         super().__init__(**kwargs)
@@ -58,6 +59,7 @@ class XBridgeConfig(LlamaConfig):
         self.freeze_mapping_llm2dec = freeze_mapping_llm2dec
         self.llm_only = llm_only
         self.train_device_map = train_device_map
+        self.use_embed_fusion = use_embed_fusion
         self.mt_vocab_size = mt_vocab_size
 
 class MLP(nn.Module):
@@ -179,6 +181,11 @@ class LlamaForCasualLMWithXBridge(LlamaForCausalLM):
             self.mt_hidden_size = self.config_mt.d_model
         
         self.mapping_enc2llm = Mapping(self.mt_hidden_size, self.mt_hidden_size*4, self.config_llm.hidden_size, 1, hidden_act=config.hidden_act, rms_norm_eps=config.rms_norm_eps).to(self.model_mt.device)      # trainable
+        # Embedding-fusion branch: maps raw NLLB token embeddings (d_model) to LLM hidden,
+        # added (residual) to mapping_enc2llm(Enc(x)) when config.use_embed_fusion=True.
+        self.mapping_embed = nn.Sequential(
+            MLP(self.mt_hidden_size, self.mt_hidden_size*4, self.config_llm.hidden_size, config.hidden_act, config.rms_norm_eps)
+        ).to(self.model_mt.device)
         self.mapping_llm2dec = Mapping(self.config_llm.hidden_size, self.config_llm.hidden_size*2, self.mt_hidden_size, 2, hidden_act=config.hidden_act, rms_norm_eps=config.rms_norm_eps)
         if is_training and config.llm_only:
             self.mapping_llm2dec = self.mapping_llm2dec.to("cpu")
@@ -292,14 +299,20 @@ class LlamaForCasualLMWithXBridge(LlamaForCausalLM):
                 input_ids_selected = pad_sequences(input_ids_selected, max_len, pad_token_id, padding_side)
                 mask_selected = (input_ids_selected != pad_token_id).long()
                 if encoder is not None:
-                    mt_encoder_outputs = encoder(
-                        input_ids=input_ids_selected,
-                        attention_mask=mask_selected,
-                        output_hidden_states=True
-                    )
-                    embedding = mt_encoder_outputs[0].to(self.mapping_enc2llm.layers[0].linear1.weight.device)
                     if mapping:
-                        embedding = self.mapping_enc2llm(embedding)
+                        # Embed-only ablation: skip NLLB encoder, source feature = mapping_embed(E(x)).
+                        nllb_emb = self.model_mt.get_input_embeddings()(input_ids_selected)
+                        nllb_emb = nllb_emb.to(self.mapping_embed[0].linear1.weight.device)
+                        nllb_emb = nllb_emb * mask_selected.unsqueeze(-1).to(nllb_emb.dtype)
+                        embedding = self.mapping_embed(nllb_emb)
+                    else:
+                        # mapping=False: raw encoder output for ot_loss path (unused when llm_only/ot_lambda=0).
+                        mt_encoder_outputs = encoder(
+                            input_ids=input_ids_selected,
+                            attention_mask=mask_selected,
+                            output_hidden_states=True
+                        )
+                        embedding = mt_encoder_outputs[0].to(self.mapping_enc2llm.layers[0].linear1.weight.device)
                 else:
                     embedding = llm_embedding_layer(input_ids_selected)
             else:

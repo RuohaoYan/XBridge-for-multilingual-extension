@@ -38,6 +38,7 @@ class XBridgeConfig(LlamaConfig):
         freeze_mapping_llm2dec = False,
         llm_only = True,
         train_device_map = "auto",
+        use_embed_fusion = False,
         mt_vocab_size = 32000,
         **kwargs):
         super().__init__(**kwargs)
@@ -58,6 +59,7 @@ class XBridgeConfig(LlamaConfig):
         self.freeze_mapping_llm2dec = freeze_mapping_llm2dec
         self.llm_only = llm_only
         self.train_device_map = train_device_map
+        self.use_embed_fusion = use_embed_fusion
         self.mt_vocab_size = mt_vocab_size
 
 class MLP(nn.Module):
@@ -179,6 +181,11 @@ class LlamaForCasualLMWithXBridge(LlamaForCausalLM):
             self.mt_hidden_size = self.config_mt.d_model
         
         self.mapping_enc2llm = Mapping(self.mt_hidden_size, self.mt_hidden_size*4, self.config_llm.hidden_size, 1, hidden_act=config.hidden_act, rms_norm_eps=config.rms_norm_eps).to(self.model_mt.device)      # trainable
+        # Embedding-fusion branch: maps raw NLLB token embeddings (d_model) to LLM hidden,
+        # added (residual) to mapping_enc2llm(Enc(x)) when config.use_embed_fusion=True.
+        self.mapping_embed = nn.Sequential(
+            MLP(self.mt_hidden_size, self.mt_hidden_size*4, self.config_llm.hidden_size, config.hidden_act, config.rms_norm_eps)
+        ).to(self.model_mt.device)
         self.mapping_llm2dec = Mapping(self.config_llm.hidden_size, self.config_llm.hidden_size*2, self.mt_hidden_size, 2, hidden_act=config.hidden_act, rms_norm_eps=config.rms_norm_eps)
         if is_training and config.llm_only:
             self.mapping_llm2dec = self.mapping_llm2dec.to("cpu")
@@ -300,6 +307,11 @@ class LlamaForCasualLMWithXBridge(LlamaForCausalLM):
                     embedding = mt_encoder_outputs[0].to(self.mapping_enc2llm.layers[0].linear1.weight.device)
                     if mapping:
                         embedding = self.mapping_enc2llm(embedding)
+                        # Residual embed-fusion: add mapping_embed(raw NLLB token embeddings)
+                        if getattr(self.config, "use_embed_fusion", False):
+                            nllb_emb = self.model_mt.get_input_embeddings()(input_ids_selected).to(embedding.dtype).to(embedding.device)
+                            nllb_emb = nllb_emb * mask_selected.unsqueeze(-1).to(nllb_emb.dtype)
+                            embedding = embedding + self.mapping_embed(nllb_emb)
                 else:
                     embedding = llm_embedding_layer(input_ids_selected)
             else:

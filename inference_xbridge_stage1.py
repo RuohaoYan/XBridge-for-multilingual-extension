@@ -29,14 +29,25 @@ def main(
     output_dir: str = "",
     error_file: str = "",
     trans_langs: str = "",
+    test_langs: str = "",
     mode: str = "supervised"
 ):
+    if not trans_langs and test_langs:
+        trans_langs = test_langs
+
     base_model = base_model or os.environ.get("BASE_MODEL", "")
     assert (
         base_model
     ), "Please specify a --base_model, e.g. --base_model='huggyllama/llama-7b'"
 
-    trans_langs = list(trans_langs)
+    os.makedirs(output_dir, exist_ok=True)
+
+    if isinstance(trans_langs, str):
+        trans_langs = [x.strip() for x in trans_langs.split(",") if x.strip()]
+    elif isinstance(trans_langs, tuple):
+        trans_langs = list(trans_langs)
+    else:
+        trans_langs = list(trans_langs)
 
     lang_map_mm2l = {
         'en': 'English', 'zh': 'Chinese', 'es': 'Spanish', 'fr': 'French', 
@@ -86,11 +97,12 @@ def main(
     # load model
     config = XBridgeConfig.from_pretrained(base_model)
     config.max_gen_len = max_new_tokens
+    config.llm_only = True
     model = LlamaForCasualLMWithXBridge.from_pretrained(
         base_model,
         config=config,
-        torch_dtype=torch.float32,
-        device_map="auto",
+        torch_dtype=torch.float16,
+        device_map="cuda:0",
         len_tokenizer_llm=len(tokenizer_llm)
     )
     model.model_mt.lm_head.weight = model.model_mt.model.shared.weight
@@ -109,7 +121,7 @@ def main(
         )
         return encoding_m2m["input_ids"]
 
-    def pad_and_mask(input_ids_mt, pad_token_id):
+    def pad_and_mask(input_ids_mt, pad_token_id, device):
         input_ids = [seq for seq in input_ids_mt]
         
         max_len = max(len(seq) for seq in input_ids)
@@ -117,7 +129,7 @@ def main(
         attention_mask = [[0] * (max_len - len(seq)) + [1] * len(seq) for seq in input_ids]
         input_ids = [[pad_token_id] * (max_len - len(seq)) + seq for seq in input_ids]
 
-        return torch.tensor(input_ids).cuda(), torch.tensor(attention_mask).cuda(), torch.tensor(augmentation).cuda()
+        return torch.tensor(input_ids, device=device), torch.tensor(attention_mask, device=device), torch.tensor(augmentation, device=device)
     
     def evaluate(
         instruction=None,
@@ -138,23 +150,34 @@ def main(
             langs_map=langs_map
         )
 
-        input_ids, attention_mask, augmentation = pad_and_mask(input_ids_mt, tokenizer_llm.pad_token_id)
+        input_ids, attention_mask, augmentation = pad_and_mask(
+            input_ids_mt, tokenizer_llm.pad_token_id, next(model.parameters()).device
+        )
 
         if "nllb" in mt_tokenizer_path.lower():
             forced_decoder_start_token_id = tokenizer_mt.convert_tokens_to_ids([langs_map[lang] for lang in tgt_lang])
         else:
             forced_decoder_start_token_id = [tokenizer_mt.get_lang_id(langs_map[lang]) for lang in tgt_lang]
         
-        llm_generate_ids, mt_dec_generate_ids_list = model(
+        model_out = model(
             input_ids=input_ids,
             attention_mask=attention_mask,
             augmentation=augmentation,
-            forced_decoder_start_token_id=forced_decoder_start_token_id
+            forced_decoder_start_token_id=forced_decoder_start_token_id,
         )
+        llm_generate_ids = model_out[0]
         llm_outputs = tokenizer_llm.batch_decode(llm_generate_ids, skip_special_tokens=True)
-        mt_dec_outputs = [tokenizer_mt.batch_decode(mt_dec_generate_ids, skip_special_tokens=True)for mt_dec_generate_ids in mt_dec_generate_ids_list]
+        mt_dec_outputs_list = []
+        if len(model_out) > 1:
+            mt_dec_outputs_list = model_out[1]
+            if not isinstance(mt_dec_outputs_list, list):
+                mt_dec_outputs_list = [mt_dec_outputs_list]
+            mt_dec_outputs_list = [
+                tokenizer_mt.batch_decode(mt_dec_generate_ids, skip_special_tokens=True)
+                for mt_dec_generate_ids in mt_dec_outputs_list
+            ]
 
-        return llm_outputs, mt_dec_outputs
+        return llm_outputs, mt_dec_outputs_list
 
 
     for idx, lang in enumerate(trans_langs):
@@ -183,12 +206,13 @@ def main(
             with open(file_out_llm, "a", encoding="utf-8") as f:
                 f.write(text + "\n")
             
-            for mt_dec_outputs, tgt_lang in zip(mt_dec_outputs_list, trans_langs):
-                file_out_mt = f"{output_dir}/{mode}.{lang}-{tgt_lang}.{tgt_lang}.mt"
-                mt_dec_outputs = [output.replace("\n", " ") for output in mt_dec_outputs]
-                text = "\n".join(mt_dec_outputs)
-                with open(file_out_mt, "a", encoding="utf-8") as f:
-                    f.write(text + "\n")
+            if mt_dec_outputs_list:
+                for mt_dec_outputs, tgt_lang in zip(mt_dec_outputs_list, trans_langs):
+                    file_out_mt = f"{output_dir}/{mode}.{lang}-{tgt_lang}.{tgt_lang}.mt"
+                    mt_dec_outputs = [output.replace("\n", " ") for output in mt_dec_outputs]
+                    text = "\n".join(mt_dec_outputs)
+                    with open(file_out_mt, "a", encoding="utf-8") as f:
+                        f.write(text + "\n")
 
 if __name__ == "__main__":
     fire.Fire(main)

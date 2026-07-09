@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+*.so
+
+# IDE / local
+.claude/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Large artifacts (download or train locally)
+model/
+data/
+outputs/
+bak/
+
+# Checkpoints and weights
+*.safetensors
+*.safetensors.index.json
+*.bin
+*.pt
+*.pth
+*.ckpt
+
+# Logs and runtime
+*.log
+*.pid
+*.out
+*.err
+
+# OS
+.DS_Store
+Thumbs.db

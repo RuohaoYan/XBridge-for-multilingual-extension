@@ -37,16 +37,22 @@ def main(
     testset_dir: str = "",
     output_dir: str = "",
     test_langs: str = "",
+    no_src_in_prompt: bool = False,
+    wrong_src_in_prompt: bool = False,
 ):
     base_model = base_model or os.environ.get("BASE_MODEL", "")
     assert (
         base_model
     ), "Please specify a --base_model, e.g. --base_model='huggyllama/llama-7b'"
 
-    if isinstance(test_langs, tuple):
+    os.makedirs(output_dir, exist_ok=True)
+
+    if isinstance(test_langs, str):
+        test_langs = [x.strip() for x in test_langs.split(",") if x.strip()]
+    elif isinstance(test_langs, tuple):
         test_langs = list(test_langs)
     else:
-        test_langs = [test_langs]
+        test_langs = list(test_langs)
 
     lang_map_mm2l = {
         'en': 'English', 'zh': 'Chinese', 'es': 'Spanish', 'fr': 'French', 
@@ -95,11 +101,12 @@ def main(
     # load model
     config = XBridgeConfig.from_pretrained(base_model)
     config.max_gen_len = max_new_tokens
+    config.llm_only = True
     model = LlamaForCasualLMWithXBridge.from_pretrained(
         base_model,
         config=config,
-        torch_dtype=torch.float32,
-        device_map="auto",
+        torch_dtype=torch.float16,
+        device_map="cuda:0",
         len_tokenizer_llm=len(tokenizer_llm)
     )
     model.model_mt.lm_head.weight = model.model_mt.model.shared.weight
@@ -128,7 +135,7 @@ def main(
         )
         return encoding_llm["input_ids"]
 
-    def pad_and_mask(input_ids_mt, input_ids_prompt, pad_token_id):
+    def pad_and_mask(input_ids_mt, input_ids_prompt, pad_token_id, device):
         input_ids = [seq1 + seq2 for seq1, seq2 in zip(input_ids_mt, input_ids_prompt)]
         
         max_len = max(len(seq) for seq in input_ids)
@@ -136,7 +143,7 @@ def main(
         attention_mask = [[0] * (max_len - len(seq)) + [1] * len(seq) for seq in input_ids]
         input_ids = [[pad_token_id] * (max_len - len(seq)) + seq for seq in input_ids]
 
-        return torch.tensor(input_ids).cuda(), torch.tensor(attention_mask).cuda(), torch.tensor(augmentation).cuda()
+        return torch.tensor(input_ids, device=device), torch.tensor(attention_mask, device=device), torch.tensor(augmentation, device=device)
     
     def get_response(seq, skip_words=""):
         return seq.split(skip_words)[1].strip()
@@ -160,28 +167,38 @@ def main(
             langs_map=langs_map
         )
         
+        _head = "Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n"
+        _tail = "\n\n### Response: Let's think step by step."
+        if no_src_in_prompt:
+            _prompts = [f"{_head}{_tail}" for _ in input]
+        elif wrong_src_in_prompt:
+            _prompts = [f"{_head}Janet's ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?{_tail}" for _ in input]
+        else:
+            _prompts = [f"{_head}{seq}{_tail}" for seq in input]
         input_ids_prompt = llm_input_features(
-            input_texts_llm=[f"Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n{seq}\n\n### Response: Let's think step by step." for seq in input], 
+            input_texts_llm=_prompts,
             add_special_tokens=False
         )
 
-        input_ids, attention_mask, augmentation = pad_and_mask(input_ids_mt, input_ids_prompt, tokenizer_llm.pad_token_id)
+        input_ids, attention_mask, augmentation = pad_and_mask(
+            input_ids_mt, input_ids_prompt, tokenizer_llm.pad_token_id, next(model.parameters()).device
+        )
 
         if "nllb" in mt_tokenizer_path.lower():
             forced_decoder_start_token_id = [tokenizer_mt.convert_tokens_to_ids(langs_map[lang]) for lang in tgt_lang]
         else:
             forced_decoder_start_token_id = [tokenizer_mt.get_lang_id(langs_map[lang]) for lang in tgt_lang]
 
-        llm_generate_ids, mt_dec_generate_ids = model(
+        model_out = model(
             input_ids=input_ids,
             attention_mask=attention_mask,
             augmentation=augmentation,
-            forced_decoder_start_token_id=forced_decoder_start_token_id
+            forced_decoder_start_token_id=forced_decoder_start_token_id,
         )
+        llm_generate_ids = model_out[0]
         llm_outputs = tokenizer_llm.batch_decode(llm_generate_ids, skip_special_tokens=True)
-        mt_dec_outputs = [tokenizer_mt.batch_decode(mt_dec_generate_id, skip_special_tokens=True) for mt_dec_generate_id in mt_dec_generate_ids]
 
-        return llm_outputs, mt_dec_outputs
+        return llm_outputs
 
 
     for lang in test_langs:
@@ -194,58 +211,38 @@ def main(
         answers = [d["answer"] for d in testset]
 
         print("Evaluating: " + lang + ", lines: " + str(len(lines)))
-        
+
         hit_llm = 0
-        hit_mt = {tgt_lang: 0 for tgt_lang in test_langs}
-        
+
         for i in range(0, len(lines), batch_size):
             r = (i + batch_size) if (i + batch_size <= len(lines)) else len(lines)
-            
+
             # inference
-            llm_outputs, mt_dec_outputs = evaluate(
-                input=lines[i: r], 
+            llm_outputs = evaluate(
+                input=lines[i: r],
                 src_lang=lang_map_mm2l[lang],
                 max_new_tokens=max_new_tokens,
                 tgt_lang=[lang_map_mm2l[lang]]
             )
-            
+
             # write generation to files
             llm_outputs = [output.replace("\n", " ") for output in llm_outputs]
             text = "\n".join(llm_outputs)
             with open(file_out_llm, "a", encoding="utf-8") as f:
                 f.write(text + "\n")
-            
-            for tgt_lang, mt_dec_output in zip(test_langs, mt_dec_outputs):
-                file_out_mt = f"{output_dir}/mgsm_{lang}.{tgt_lang}.mt"
-                mt_dec_output = [output.replace("\n", " ") for output in mt_dec_output]
-                text = "\n".join(mt_dec_output)
-                with open(file_out_mt, "a", encoding="utf-8") as f:
-                    f.write(text + "\n")
-            
+
             # calculate acc
             ground_truths = [extract_last_num(text) for text in answers[i: r]]
-            
+
             results_llm = [extract_last_num(text) for text in llm_outputs]
             for result_p, ground_truth in zip(results_llm, ground_truths):
                 if float(result_p) == float(ground_truth):
                     hit_llm += 1
-            
-            for tgt_lang, mt_dec_output in zip(test_langs, mt_dec_outputs):
-                results_mt = [extract_last_num(text) for text in mt_dec_output]
-                for result_p, ground_truth in zip(results_mt, ground_truths):
-                    if float(result_p) == float(ground_truth):
-                        hit_mt[tgt_lang] += 1
-                    
+
         acc_llm = round(hit_llm / len(lines) * 100, 4)
         print(f"Accuracy for gsm_8k_{lang}.en.llm: {acc_llm}")
         with open(result_out, "a+") as f:
             f.write(f"Accuracy for gsm_8k_{lang}.en.llm: {acc_llm}\n")
-                
-        for tgt_lang in test_langs:
-            acc_mt = round(hit_mt[tgt_lang] / len(lines) * 100, 4)
-            print(f"Accuracy for gsm_8k_{lang}.{tgt_lang}.mt:  {acc_mt}")
-            with open(result_out, "a+") as f:
-                f.write(f"Accuracy for gsm_8k_{lang}.{tgt_lang}.mt: {acc_mt}\n")
 
 
 if __name__ == "__main__":
