@@ -14,6 +14,7 @@
 | 1 | Stage 1 跨模型对齐翻译 | XBridge-base | FLORES-101 devtest | BLEU / COMET | `scripts/run_flores.sh` |
 | 2 | Stage 2/3 多语数学推理 | XBridge-SFT | MGSM (250 题/语言) | Accuracy | `scripts/run_mgsm.sh` |
 | 3 | Encoder-only 适配训练（消融） | 自训 mapping_enc2llm | FLORES x→en | BLEU | `scripts/run_train_encoder_only.sh` |
+| 3.2 | Encoder-only 均衡多语（9×50k） | 自训 mapping_enc2llm | 6 语样例 spot-check | 定性（幻觉） | `stage1_encoder_x_en/run_train.sh` |
 | 4 | Zero-shot MGSM 必要性消融 | encoder-only 各变体 | MGSM | Accuracy | `scripts/run_eval_encoder_only_zeroshot.sh` |
 | 5 | 实现/数值一致性测试 | — | — | 一致性 | `scripts/test_*.py` |
 | 6 | SFT 翻译能力退化对比 | base vs SFT | FLORES 前 200 句 | BLEU | `scripts/compare_bleu_200.py` |
@@ -120,6 +121,34 @@
 
 - **工程记录**：本机 4×RTX 5090 上 NCCL 集合通信（≥1MB）报 illegal memory access，标准 DDP 不可用；改用 gloo（CPU）后端仅同步 21M mapping 梯度，重计算全部留在各卡 GPU，近线性 4× 提速。脚本：`train_encoder_only_mp.py` + `scripts/run_train_mp_200k.sh`。
 
+### 3.2 均衡多语 9×50k 的 encoder-only 训练（本次新增）
+
+- **动机**：§3.1 的负面结论来自**单语** zh→en。这里把同一"仅重训 `mapping_enc2llm`、冻结 LLM、纯英文 CE"配方推广到**均衡多语**，检验"多语言覆盖"能否弥补缺口。独立文件夹 `stage1_encoder_x_en/`。
+- **数据**：9 语 × 50k = **450,000**，均衡混合。构造脚本 `stage1_encoder_x_en/build_from_opus100.py`。
+  - 8 语来自 OPUS-100 parquet（zh=en-zh, bn=bn-en, th=en-th, ja=en-ja, ru=en-ru, de=de-en, fr=en-fr, es=en-es）。
+  - sw 来自 NLLB JSONL `data/encoder_only/opus100_sw_en_200k.jsonl`（20 万→过滤去重后 199,722 可用→采样 5 万；本地 OPUS-100 镜像无 sw-en）。
+  - 统一流程：normalize → 过滤（2–500 字符、去 `src==tgt`、`tgt` 须含拉丁字母）→ 精确去重 → 蓄水池采样（seed 42+idx）。
+  - 产物：`data/stage1_encoder_x_en/{<lang>_en.jsonl, multilingual_x_en.jsonl(450k), multilingual_x_en.train.jsonl(450k)}`。schema 见 `stage1_encoder_x_en/DATA_REQUIREMENTS.md` §12。
+- **训练**：`stage1_encoder_x_en/train_encoder_x_en_mp.py`（`llm_only=True`，仅 `mapping_enc2llm` 可训 = **20.98M**；NLLB/LLM 全冻结；`dec_lambda=0, ot_lambda=0`）。4×RTX 5090，gloo CPU 梯度同步。`per_device_batch=6 × grad_accum=2 × 4 卡 = eff_batch 48`，lr=2e-5 cosine，warmup_ratio=0.03，bf16，3 epoch。
+  - 共 **28,120** optimizer steps；loss **5.98 → ~2.5**（warmup 后随 lr 上升快降，末段退火收敛，无 NaN/发散）。
+  - 产物：`outputs/stage1_encoder_x_en_multi/checkpoint-final`（+ 每 500 步 / 每 epoch）。日志 `outputs/stage1_encoder_x_en_multi/train.log`。
+- **结果（多语样例 spot-check，非 BLEU）**：`stage1_encoder_x_en/_test_samples.py`，一次加载跑 6 语；输出**流畅但与原句无关**（幻觉）：
+
+| 语种 | 原句（含义） | 模型输出 |
+|------|------------|----------|
+| zh | 今天天气很好，我想去公园散步 | *I'm going to miss the beach.* |
+| de | 我昨天读了一本有趣的书 | *I've always wanted to write a book.* |
+| fr | 火车明早八点出发 | *The game will be played on Saturday.* |
+| ru | 她喜欢晚上听音乐 | *I don't like to watch TV.* |
+| ja | 他每天早上喝咖啡 | *I don't drink.*（唯一蹭到 "drink"） |
+| sw | 孩子们在场上踢球 | *The water is very low.* |
+
+- **结论**：均衡多语数据**同样无法**让 encoder-only 配方产出忠实翻译——与 §3.1 单语结论一致并将其推广：输出随输入变化但语义不忠实，低 loss（2.5）只是"冻结 LLM + 英文 CE"的流畅英文捷径，非跨语对齐。**增加语言数 / 数据量都不是杠杆**；缺口在缺 decoder CE + OT 联合约束（见 §3.1 诊断）。
+  - 边界（诚实标注）：本次仅做 6 句定性抽查，**未计算 BLEU**（§3.1 已在 FLORES 上给出 zh→en BLEU≈0，机制同源）；未与 §3.1 checkpoint 做表示层余弦对比。
+- **工程记录（本次）**：
+  1. **喂数据瓶颈**：`DataLoader` 原本 `num_workers=0`，逐 batch 在主进程做 NLLB+LLM 分词，GPU 利用率仅 ~35% 且剧烈抖动。改为 `num_workers=8 + pin_memory + persistent_workers + prefetch`、batch 2→6 后，利用率升到 **80–100%**（`train_encoder_x_en_mp.py` / `config.env` / `run_train.sh`）。
+  2. **GPU3 掉总线**：训练中途 GPU3 出现 `device handle ... Unknown Error`（掉出 PCIe 总线），导致整机所有卡 CUDA 无法初始化（`torch._C._cuda_init()` 全崩）；经管理员复位/重启恢复后才重启 4 卡训练。属 5090 稳定性问题，非代码所致。
+
 ---
 
 ## 4. Zero-shot MGSM 必要性消融
@@ -205,3 +234,4 @@ python scripts/compare_bleu_200.py       # SFT vs base 翻译退化对比
 2. **XBridge-SFT 复现论文 MGSM 结果**：英文 CoT 路径 45–65% 准确率，与论文一致；decoder 路径 0（设计如此）。
 3. **Stage 2/3 不可省**：仅 encoder-only 适配 MGSM 仅 3–25%，完整 SFT 达 56–65%。
 4. **SFT 丧失裸翻译能力**：BLEU 从 30+ 塌到 1–2，输出重复退化；SFT 应配合指令模板用于推理，不应作翻译模型使用。
+5. **Encoder-only 配方缺口稳健**：仅重训 `mapping_enc2llm`（冻结 LLM、纯英文 CE）在单语（§3.1，zh→en BLEU≈0）与均衡多语（§3.2，9×50k，6 语定性幻觉）下都无法产出忠实翻译；低 loss 是流畅英文捷径，缺口在 decoder CE + OT 联合约束，堆数据/加语言均无效。

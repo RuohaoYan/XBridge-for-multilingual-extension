@@ -246,6 +246,9 @@ def parse_args():
     parser.add_argument("--mt_path", default="model/nllb-200-1.3B")
     parser.add_argument("--llm_path", default="model/Meta-Llama-3-8B")
     parser.add_argument("--per_device_batch_size", type=int, default=2)
+    parser.add_argument("--num_workers", type=int, default=8,
+                        help="DataLoader workers; tokenization runs here, off the GPU critical path")
+    parser.add_argument("--prefetch_factor", type=int, default=4)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=5)
     parser.add_argument("--learning_rate", type=float, default=2e-5)
     parser.add_argument("--weight_decay", type=float, default=0.01)
@@ -266,6 +269,9 @@ def parse_args():
 
 def main():
     args = parse_args()
+    # Fast tokenizers already use Rust threads; silence the fork warning and avoid
+    # oversubscription when DataLoader workers each hold a tokenizer copy.
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     world_size = int(os.environ.get("WORLD_SIZE", 1))
     rank = int(os.environ.get("RANK", 0))
@@ -293,14 +299,24 @@ def main():
     tokenizer_llm.padding_side = "left"
 
     dataset = XEnJsonlDataset(args.train_file)
+    # Pipeline tokenization across worker processes so the GPUs are not starved
+    # waiting on per-batch NLLB/LLM tokenization done in the main process.
+    loader_kwargs = dict(
+        batch_size=args.per_device_batch_size,
+        drop_last=True,
+        collate_fn=lambda b: collate_x_en(b, tokenizer_mt, tokenizer_llm, args.max_src_len, args.max_tgt_len, args.max_prompt_len),
+        num_workers=args.num_workers,
+        pin_memory=True,
+    )
+    if args.num_workers > 0:
+        loader_kwargs["persistent_workers"] = True
+        loader_kwargs["prefetch_factor"] = args.prefetch_factor
     if world_size > 1:
         sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True)
-        dataloader = DataLoader(dataset, batch_size=args.per_device_batch_size, sampler=sampler, drop_last=True,
-                                collate_fn=lambda b: collate_x_en(b, tokenizer_mt, tokenizer_llm, args.max_src_len, args.max_tgt_len, args.max_prompt_len))
+        dataloader = DataLoader(dataset, sampler=sampler, **loader_kwargs)
     else:
         sampler = None
-        dataloader = DataLoader(dataset, batch_size=args.per_device_batch_size, shuffle=True, drop_last=True,
-                                collate_fn=lambda b: collate_x_en(b, tokenizer_mt, tokenizer_llm, args.max_src_len, args.max_tgt_len, args.max_prompt_len))
+        dataloader = DataLoader(dataset, shuffle=True, **loader_kwargs)
 
     model, config = build_model(args, len(tokenizer_llm), dtype, device)
     trainable = [p for p in model.mapping_enc2llm.parameters() if p.requires_grad]

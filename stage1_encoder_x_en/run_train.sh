@@ -49,6 +49,7 @@ torchrun --nproc_per_node="${NPROC_PER_NODE:-3}" "${STAGE_DIR}/train_encoder_x_e
   --mt_path "${MT_PATH}" \
   --llm_path "${LLM_PATH}" \
   --per_device_batch_size "${PER_DEVICE_BATCH_SIZE:-2}" \
+  --num_workers "${NUM_WORKERS:-8}" \
   --gradient_accumulation_steps "${GRADIENT_ACCUMULATION_STEPS:-5}" \
   --learning_rate "${LEARNING_RATE:-2e-5}" \
   --weight_decay "${WEIGHT_DECAY:-0.01}" \
